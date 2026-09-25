@@ -29,10 +29,16 @@ jobs:
         run: npm ci
       - name: Build
         run: npm run build
+      - name: Prepare Pages site
+        run: |
+          mkdir _site
+          cp index.html _site/index.html
+          cp -r assets _site/assets
+          cp favicon.svg icons.svg _site/
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: dist
+          path: _site
   deploy:
     environment:
       name: github-pages
