@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { BrowserMultiFormatReader } from '@zxing/browser'
-import { NotFoundException } from '@zxing/library'
+import { BarcodeFormat, DecodeHintType, NotFoundException } from '@zxing/library'
 import { ArrowRight, Camera, Check, ChevronDown, CircleHelp, Grid2X2, Info, Leaf, List, Menu, Search, ScanLine, Sparkles, X } from 'lucide-react'
 import './App.css'
 
@@ -133,7 +133,18 @@ function App() {
         const video = videoRef.current
         if (!video) return
 
-        const codeReader = new BrowserMultiFormatReader()
+        const hints = new Map<DecodeHintType, unknown>([
+          [DecodeHintType.POSSIBLE_FORMATS, [
+            BarcodeFormat.EAN_13,
+            BarcodeFormat.EAN_8,
+            BarcodeFormat.UPC_A,
+            BarcodeFormat.UPC_E,
+            BarcodeFormat.CODE_128,
+            BarcodeFormat.ITF,
+          ]],
+          [DecodeHintType.TRY_HARDER, true],
+        ])
+        const codeReader = new BrowserMultiFormatReader(hints)
         setScanStatus('Cadrez le code-barres')
 
         // On laisse ZXing gérer seul l'accès caméra (via decodeFromConstraints) :
