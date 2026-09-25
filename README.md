@@ -21,4 +21,4 @@ Le build de production est généré dans `dist/` avec `npm run build`.
 
 ## Déploiement GitHub Pages
 
-Le workflow dans `.github/workflows/deploy.yml` publie automatiquement le dossier `dist/` à chaque push sur `main`. Dans les paramètres du dépôt GitHub, sélectionner **Pages > GitHub Actions** comme source.
+Le workflow dans `.github/workflows/deploy.yml` publie automatiquement le dossier `dist/` à chaque push sur `main` ou `gh-pages`. Dans les paramètres du dépôt GitHub, sélectionner **Pages > GitHub Actions** comme source.
