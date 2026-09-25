@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode'
+import { BrowserMultiFormatReader } from '@zxing/browser'
 import { ArrowRight, Camera, Check, ChevronDown, CircleHelp, Grid2X2, Info, Leaf, List, Menu, Search, ScanLine, Sparkles, X } from 'lucide-react'
 import './App.css'
 
@@ -85,23 +85,6 @@ const recipes: Recipe[] = [
   { name: 'Poêlée verte', type: 'Plat végétal', time: '20 min', image: images.greenBean, ingredients: ['haricot vert', 'brocoli', 'épinard', 'ail'], description: 'Un plat rapide avec les légumes verts à portée de main.' },
 ]
 
-const scannerFormats = [
-  Html5QrcodeSupportedFormats.EAN_13,
-  Html5QrcodeSupportedFormats.EAN_8,
-  Html5QrcodeSupportedFormats.CODE_128,
-  Html5QrcodeSupportedFormats.UPC_A,
-  Html5QrcodeSupportedFormats.UPC_E,
-]
-const scannerConfig = { verbose: false, useBarCodeDetectorIfSupported: false, formatsToSupport: scannerFormats }
-const cameraScanConfig = {
-  fps: 20,
-  qrbox: (viewfinderWidth: number, viewfinderHeight: number) => ({
-    width: Math.min(350, Math.floor(viewfinderWidth * 0.86)),
-    height: Math.min(180, Math.floor(viewfinderHeight * 0.42)),
-  }),
-  disableFlip: true,
-}
-
 function App() {
   const [activeNav, setActiveNav] = useState('Saison')
   const [search, setSearch] = useState('')
@@ -116,7 +99,8 @@ function App() {
     const stored = localStorage.getItem('blanquette-pantry')
     return stored ? JSON.parse(stored) : []
   })
-  const scannerRef = useRef<Html5Qrcode | null>(null)
+  const videoRef = useRef<HTMLVideoElement | null>(null)
+  const scannerControlsRef = useRef<{ stop: () => void } | null>(null)
   const lookupProductRef = useRef<(code: string) => void>(() => undefined)
   const lastSearchedCodeRef = useRef('')
   const filteredProduce = produce.filter((item) => (category === 'Tous' || item.category === category) && item.name.toLowerCase().includes(search.toLowerCase()))
@@ -136,8 +120,6 @@ function App() {
     if (!isScannerOpen) return
 
     let cancelled = false
-    let scanner: Html5Qrcode | undefined
-
     const startCamera = async () => {
       if (!navigator.mediaDevices?.getUserMedia) {
         setScanStatus('Caméra indisponible, saisissez un code')
@@ -145,28 +127,26 @@ function App() {
       }
 
       try {
-        scanner = new Html5Qrcode('scanner-reader', scannerConfig)
-        scannerRef.current = scanner
+        const video = videoRef.current
+        if (!video) return
+
+        const reader = new BrowserMultiFormatReader()
         setScanStatus('Recherche en continu...')
-        const cameras = await Html5Qrcode.getCameras()
-        const preferredCamera = cameras.find((camera) => /back|rear|environment|arrière/i.test(camera.label)) ?? cameras[0]
-        const cameraSource = preferredCamera?.id ?? { facingMode: { ideal: 'environment' } }
-        await scanner.start(
-          cameraSource,
-          cameraScanConfig,
-          (value) => {
-            if (cancelled) return
-            const cleanCode = value.replace(/\D/g, '').trim()
+        scannerControlsRef.current = await reader.decodeFromConstraints(
+          { video: { facingMode: { ideal: 'environment' } } },
+          video,
+          (result) => {
+            if (cancelled || !result) return
+            const cleanCode = result.getText().replace(/\D/g, '').trim()
             if (!cleanCode) return
             setBarcode(cleanCode)
             setScanStatus('Code détecté')
             lookupProductRef.current(cleanCode)
-            scanner?.pause(true)
+            scannerControlsRef.current?.stop()
           },
-          () => undefined,
         )
       } catch {
-        setScanStatus('Caméra indisponible, saisissez un code')
+        if (!cancelled) setScanStatus('Autorisez la caméra ou saisissez un code')
       }
     }
 
@@ -174,11 +154,9 @@ function App() {
 
     return () => {
       cancelled = true
-      const activeScanner = scannerRef.current
-      scannerRef.current = null
-      if (activeScanner) {
-        activeScanner.stop().catch(() => undefined).finally(() => activeScanner.clear())
-      }
+      scannerControlsRef.current?.stop()
+      scannerControlsRef.current = null
+      if (videoRef.current) videoRef.current.srcObject = null
     }
   }, [isScannerOpen])
 
@@ -204,57 +182,6 @@ function App() {
     lastSearchedCodeRef.current = normalizedCode
     lookupProduct(normalizedCode)
   }, [barcode, lookupProduct])
-
-  const scanCurrentFrame = async () => {
-    const scanner = scannerRef.current
-    const video = document.querySelector('#scanner-reader video') as HTMLVideoElement | null
-    if (!scanner || !video || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
-      setScanStatus('La caméra n’est pas encore prête')
-      return
-    }
-
-    const canvas = document.createElement('canvas')
-    canvas.width = video.videoWidth
-    canvas.height = video.videoHeight
-    canvas.getContext('2d')?.drawImage(video, 0, 0, canvas.width, canvas.height)
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.95))
-    if (!blob) {
-      setScanStatus('Capture impossible, réessayez')
-      return
-    }
-
-    setScanStatus('Analyse de l’image...')
-    try {
-      await scanner.stop()
-      const value = await scanner.scanFile(new File([blob], 'camera-frame.jpg', { type: 'image/jpeg' }), false)
-      const cleanCode = value.replace(/\D/g, '').trim()
-      if (!cleanCode) throw new Error('Code vide')
-      setBarcode(cleanCode)
-      setScanStatus('Code détecté')
-      lookupProductRef.current(cleanCode)
-    } catch {
-      setScanStatus('Aucun code détecté dans cette image')
-    } finally {
-      try {
-        await scanner.start(
-          { facingMode: { ideal: 'environment' } },
-          cameraScanConfig,
-          (value) => {
-            const cleanCode = value.replace(/\D/g, '').trim()
-            if (!cleanCode) return
-            setBarcode(cleanCode)
-            setScanStatus('Code détecté')
-            lookupProductRef.current(cleanCode)
-            scanner.pause(true)
-          },
-          () => undefined,
-        )
-        if (scanStatus === 'Aucun code détecté dans cette image') setScanStatus('Recherche en continu...')
-      } catch {
-        setScanStatus('Impossible de relancer la caméra')
-      }
-    }
-  }
 
   useEffect(() => {
     const normalizedCode = barcode.replace(/\D/g, '').trim()
@@ -284,7 +211,7 @@ function App() {
       <section className="scanner-promo"><div className="scanner-icon"><Camera size={24} /></div><div><p className="eyebrow"><span></span> Dans votre cuisine</p><h2>Un doute sur un produit ?<br /><em>On vous dit tout.</em></h2><p>Scannez son code-barres pour connaître sa composition, son Nutri-Score et bien plus encore.</p></div><button className="secondary-button" onClick={() => setIsScannerOpen(true)}>Ouvrir le scanner <ScanLine size={17} /></button></section>
       <footer><span>© 2026 Comment est votre blanquette</span><span>Le goût des choses simples <Sparkles size={14} /></span></footer>
       {selectedComponent && <div className="modal-backdrop" role="presentation" onClick={(event) => { if (event.target === event.currentTarget) setSelectedComponent(null) }}><section className="component-modal" role="dialog" aria-modal="true" aria-labelledby="component-title"><button className="close-button" onClick={() => setSelectedComponent(null)} aria-label="Fermer"><X size={20} /></button><p className="eyebrow"><span></span> Décryptage nutritionnel</p><h2 id="component-title">{selectedComponent.name}</h2><p className="component-kind">{selectedComponent.kind}</p><p className="component-summary">{selectedComponent.summary}</p><div className="detail-columns"><div><h3><Check size={16} /> Les bénéfices</h3><ul>{selectedComponent.benefits.map((benefit) => <li key={benefit}>{benefit}</li>)}</ul></div><div><h3 className="caution-title"><Info size={16} /> À garder en tête</h3><ul>{selectedComponent.cautions.map((caution) => <li key={caution}>{caution}</li>)}</ul></div></div><small>Informations générales, à replacer dans une alimentation variée.</small></section></div>}
-      {isScannerOpen && <div className="modal-backdrop" role="presentation" onClick={(event) => { if (event.target === event.currentTarget) setIsScannerOpen(false) }}><section className="scanner-modal" role="dialog" aria-modal="true" aria-labelledby="scanner-title"><button className="close-button" onClick={() => setIsScannerOpen(false)} aria-label="Fermer"><X size={20} /></button><p className="eyebrow"><span></span> Lecture intelligente</p><h2 id="scanner-title">Votre produit,<br /><em>en clair.</em></h2><div className="camera-frame"><div id="scanner-reader"></div><div className="scan-corners"></div><span>{scanStatus}</span><button type="button" className="manual-scan-button" onClick={scanCurrentFrame}>Scanner cette image</button></div><form onSubmit={(event) => { event.preventDefault(); handleBarcodeSearch() }} className="barcode-form"><input value={barcode} onChange={(event) => setBarcode(event.target.value.replace(/\D/g, ''))} placeholder="Ou saisissez le code-barres" inputMode="numeric" aria-label="Code-barres du produit" /><button type="submit" className="primary-button"><Search size={17} /> Chercher</button></form>{product && <div className="product-result"><div className="product-visual">{product.image ? <img src={product.image} alt={`Emballage de ${product.name}`} /> : <div className="product-image-placeholder"><Leaf size={32} /></div>}<p className="result-label"><Check size={14} /> Produit identifié</p><h3>{product.name}</h3><p>{product.brand || 'Marque non renseignée'}</p></div>{product.nutriscore && <div className="nutriscore-block"><div className="nutriscore-brand">NUTRI-SCORE</div><div className="nutriscore-scale" aria-label={`Nutri-Score ${product.nutriscore}`} role="img">{['A', 'B', 'C', 'D', 'E'].map((score) => <span className={`nutriscore-item score-${score.toLowerCase()} ${product.nutriscore === score ? 'selected' : ''}`} key={score}>{score}</span>)}</div></div>}</div>}<small>Données produits fournies par Open Food Facts</small></section></div>}
+      {isScannerOpen && <div className="modal-backdrop" role="presentation" onClick={(event) => { if (event.target === event.currentTarget) setIsScannerOpen(false) }}><section className="scanner-modal" role="dialog" aria-modal="true" aria-labelledby="scanner-title"><button className="close-button" onClick={() => setIsScannerOpen(false)} aria-label="Fermer"><X size={20} /></button><p className="eyebrow"><span></span> Lecture intelligente</p><h2 id="scanner-title">Votre produit,<br /><em>en clair.</em></h2><div className="camera-frame"><video ref={videoRef} autoPlay playsInline muted /><div className="scan-corners"></div><span>{scanStatus}</span></div><form onSubmit={(event) => { event.preventDefault(); handleBarcodeSearch() }} className="barcode-form"><input value={barcode} onChange={(event) => setBarcode(event.target.value.replace(/\D/g, ''))} placeholder="Ou saisissez le code-barres" inputMode="numeric" aria-label="Code-barres du produit" /><button type="submit" className="primary-button"><Search size={17} /> Chercher</button></form>{product && <div className="product-result"><div className="product-visual">{product.image ? <img src={product.image} alt={`Emballage de ${product.name}`} /> : <div className="product-image-placeholder"><Leaf size={32} /></div>}<p className="result-label"><Check size={14} /> Produit identifié</p><h3>{product.name}</h3><p>{product.brand || 'Marque non renseignée'}</p></div>{product.nutriscore && <div className="nutriscore-block"><div className="nutriscore-brand">NUTRI-SCORE</div><div className="nutriscore-scale" aria-label={`Nutri-Score ${product.nutriscore}`} role="img">{['A', 'B', 'C', 'D', 'E'].map((score) => <span className={`nutriscore-item score-${score.toLowerCase()} ${product.nutriscore === score ? 'selected' : ''}`} key={score}>{score}</span>)}</div></div>}</div>}<small>Données produits fournies par Open Food Facts</small></section></div>}
     </main>
   )
 }
