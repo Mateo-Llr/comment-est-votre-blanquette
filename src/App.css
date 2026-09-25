@@ -1,5 +1,6 @@
 .camera-frame #scanner-reader { width: 100%; height: 100%; }
 .camera-frame #scanner-reader video { width: 100%; height: 100%; object-fit: cover; opacity: .75; }
+.camera-frame { aspect-ratio: 16 / 9; height: auto !important; min-height: 180px; }
 .scan-corners { display: none; }
 .fridge-section, .recipes-section { max-width: 1180px; margin: auto; padding: 72px 32px; }
 .fridge-heading { margin-bottom: 34px; }.fridge-count { display: flex; align-items: baseline; gap: 9px; color: #899080; }.fridge-count strong { color: #e66b4c; font: 500 43px 'Fraunces', serif; }.fridge-count span { font: 10px 'DM Mono', monospace; text-transform: uppercase; }

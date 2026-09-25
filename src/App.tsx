@@ -119,7 +119,8 @@ function App() {
     if (!isScannerOpen) return
 
     let cancelled = false
-    let hasScanned = false
+    let lastDecodedCode = ''
+    let resumeTimeoutId: number | undefined
     const scanner = new Html5Qrcode('scanner-reader', {
       verbose: false,
       formatsToSupport: [
@@ -144,16 +145,22 @@ function App() {
         }),
       },
       (decodedText) => {
-        if (cancelled || hasScanned) return
+        if (cancelled) return
         const cleanCode = decodedText.replace(/\D/g, '').trim()
-        if (!cleanCode) return
+        if (!cleanCode || cleanCode === lastDecodedCode) return
 
-        hasScanned = true
+        lastDecodedCode = cleanCode
         lastSearchedCodeRef.current = cleanCode
         setBarcode(cleanCode)
         setScanStatus('Code détecté')
         lookupProductRef.current(cleanCode)
-        scanner.stop().catch(() => undefined)
+        scanner.pause(true)
+        resumeTimeoutId = window.setTimeout(() => {
+          if (cancelled) return
+          lastDecodedCode = ''
+          scanner.resume()
+          setScanStatus('Cadrez le code-barres')
+        }, 1800)
       },
       () => undefined
     ).then(() => {
@@ -164,6 +171,7 @@ function App() {
 
     return () => {
       cancelled = true
+      if (resumeTimeoutId) window.clearTimeout(resumeTimeoutId)
       scannerRef.current = null
       scanner.stop().catch(() => undefined).finally(() => {
         scanner.clear()
