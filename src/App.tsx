@@ -148,8 +148,11 @@ function App() {
         scanner = new Html5Qrcode('scanner-reader', scannerConfig)
         scannerRef.current = scanner
         setScanStatus('Recherche en continu...')
+        const cameras = await Html5Qrcode.getCameras()
+        const preferredCamera = cameras.find((camera) => /back|rear|environment|arrière/i.test(camera.label)) ?? cameras[0]
+        const cameraSource = preferredCamera?.id ?? { facingMode: { ideal: 'environment' } }
         await scanner.start(
-          { facingMode: 'environment' },
+          cameraSource,
           cameraScanConfig,
           (value) => {
             if (cancelled) return
