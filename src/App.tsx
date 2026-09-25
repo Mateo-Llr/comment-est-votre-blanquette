@@ -139,10 +139,6 @@ function App() {
       {
         fps: 10,
         aspectRatio: 1.777,
-        qrbox: (viewfinderWidth, viewfinderHeight) => ({
-          width: Math.min(360, Math.floor(viewfinderWidth * 0.88)),
-          height: Math.min(160, Math.floor(viewfinderHeight * 0.34))
-        }),
       },
       (decodedText) => {
         if (cancelled) return
