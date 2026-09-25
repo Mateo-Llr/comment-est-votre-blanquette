@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { BrowserMultiFormatReader } from '@zxing/browser'
+import { NotFoundException } from '@zxing/library'
 import { ArrowRight, Camera, Check, ChevronDown, CircleHelp, Grid2X2, Info, Leaf, List, Menu, Search, ScanLine, Sparkles, X } from 'lucide-react'
 import './App.css'
 
@@ -6,8 +8,6 @@ type Produce = { name: string; type: string; category: string; note: string; col
 type ComponentInfo = { name: string; kind: string; summary: string; benefits: string[]; cautions: string[] }
 type PantryItem = { barcode: string; name: string; brand?: string; image?: string; nutriscore?: string; addedAt: number }
 type Recipe = { name: string; type: string; time: string; image: string; ingredients: string[]; description: string }
-type BarcodeDetectorLike = { detect: (source: HTMLVideoElement) => Promise<Array<{ rawValue?: string }>> }
-type BarcodeDetectorConstructor = new (options: { formats: string[] }) => BarcodeDetectorLike
 
 const images = {
   tomato: 'https://openmoji.org/data/color/svg/1F345.svg', zucchini: 'https://openmoji.org/data/color/svg/1F952.svg', melon: 'https://openmoji.org/data/color/svg/1F348.svg', peach: 'https://openmoji.org/data/color/svg/1F351.svg', apple: 'https://openmoji.org/data/color/svg/1F34E.svg', carrot: 'https://openmoji.org/data/color/svg/1F955.svg', strawberry: 'https://openmoji.org/data/color/svg/1F353.svg', broccoli: 'https://openmoji.org/data/color/svg/1F966.svg', aubergine: 'https://openmoji.org/data/color/svg/1F346.svg', pear: 'https://openmoji.org/data/color/svg/1F350.svg', spinach: 'https://openmoji.org/data/color/svg/1F96C.svg', grape: 'https://openmoji.org/data/color/svg/1F347.svg', cucumber: 'https://openmoji.org/data/color/svg/1F952.svg', pepper: 'https://openmoji.org/data/color/svg/1FAD1.svg', greenBean: 'https://openmoji.org/data/color/svg/1FAD8.svg', sweetPotato: 'https://openmoji.org/data/color/svg/1F360.svg', banana: 'https://openmoji.org/data/color/svg/1F34C.svg', lemon: 'https://openmoji.org/data/color/svg/1F34B.svg', raspberry: 'https://openmoji.org/data/color/svg/1FAD0.svg', plum: 'https://openmoji.org/data/color/svg/1F353.svg', kiwi: 'https://openmoji.org/data/color/svg/1F95D.svg', pineapple: 'https://openmoji.org/data/color/svg/1F34D.svg', watermelon: 'https://openmoji.org/data/color/svg/1F349.svg', cherry: 'https://openmoji.org/data/color/svg/1F352.svg', blueberry: 'https://openmoji.org/data/color/svg/1FAD0.svg', avocado: 'https://openmoji.org/data/color/svg/1F951.svg', coconut: 'https://openmoji.org/data/color/svg/1F965.svg', garlic: 'https://cdn-icons-png.flaticon.com/512/4465/4465216.png', onion: 'https://cdn-icons-png.flaticon.com/512/517/517610.png', potato: 'https://openmoji.org/data/color/svg/1F954.svg', corn: 'https://openmoji.org/data/color/svg/1F33D.svg', mushroom: 'https://openmoji.org/data/color/svg/1F344.svg', lettuce: 'https://cdn-icons-png.flaticon.com/512/3823/3823393.png', orange: 'https://openmoji.org/data/color/svg/1F34A.svg', cabbage: 'https://openmoji.org/data/color/svg/1F96C.svg', leek: 'https://cdn-icons-png.flaticon.com/512/7100/7100440.png', beetroot: 'https://cdn-icons-png.flaticon.com/512/5346/5346557.png', turnip: 'https://cdn-icons-png.flaticon.com/512/7476/7476437.png', cauliflower: 'https://cdn-icons-png.flaticon.com/512/3768/3768378.png', salad: 'https://cdn-icons-png.flaticon.com/512/3823/3823393.png', asparagus: 'https://openmoji.org/data/color/svg/1F96C.svg', pumpkin: 'https://openmoji.org/data/color/svg/1F383.svg', radish: 'https://openmoji.org/data/color/svg/1F955.svg', fennel: 'https://openmoji.org/data/color/svg/1F96C.svg', artichoke: 'https://openmoji.org/data/color/svg/1F966.svg', celery: 'https://cdn-icons-png.flaticon.com/512/7100/7100440.png', peas: 'https://openmoji.org/data/color/svg/1FAD8.svg', brusselsSprouts: 'https://openmoji.org/data/color/svg/1F966.svg',
@@ -119,22 +119,72 @@ function App() {
 
   useEffect(() => {
     if (!isScannerOpen) return
-    let detector: BarcodeDetectorLike | undefined
+
     let cancelled = false
+    let controls: { stop: () => void } | undefined
+
     const startCamera = async () => {
-      if (!navigator.mediaDevices?.getUserMedia) { setScanStatus('Caméra indisponible, saisissez un code'); return }
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setScanStatus('Caméra indisponible, saisissez un code')
+        return
+      }
+
       try {
-        streamRef.current = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-        if (videoRef.current) videoRef.current.srcObject = streamRef.current
-        const Detector = (window as Window & { BarcodeDetector?: BarcodeDetectorConstructor }).BarcodeDetector
-        if (Detector) {
-          detector = new Detector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e'] }); setScanStatus('Cadrez le code-barres')
-          const scan = async () => { if (cancelled || !videoRef.current || !detector) return; const codes = await detector.detect(videoRef.current); if (codes[0]?.rawValue) { setBarcode(codes[0].rawValue); setScanStatus('Code détecté'); lookupProductRef.current(codes[0].rawValue); return } requestAnimationFrame(scan) }
-          requestAnimationFrame(scan)
-        } else setScanStatus('Saisissez le code sous la caméra')
-      } catch { setScanStatus('Autorisez la caméra ou saisissez un code') }
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: 'environment' },
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          }
+        })
+
+        streamRef.current = stream
+
+        const video = videoRef.current
+        if (!video) {
+          stream.getTracks().forEach((track) => track.stop())
+          return
+        }
+
+        video.srcObject = stream
+        await video.play()
+
+        const codeReader = new BrowserMultiFormatReader()
+        setScanStatus('Cadrez le code-barres')
+
+        controls = await codeReader.decodeFromVideoDevice(undefined, video, (result, error) => {
+          if (cancelled) return
+
+          if (result) {
+            const value = result.getText()
+            const cleanCode = value.replace(/\D/g, '').trim()
+            if (!cleanCode) return
+            setBarcode(cleanCode)
+            setScanStatus('Code détecté')
+            lookupProductRef.current(cleanCode)
+            controls?.stop()
+            stream.getTracks().forEach((track) => track.stop())
+            streamRef.current = null
+            return
+          }
+
+          if (error && !(error instanceof NotFoundException)) {
+            setScanStatus('Caméra non compatible, saisissez le code')
+          }
+        })
+      } catch {
+        setScanStatus('Autorisez la caméra ou saisissez un code')
+      }
     }
-    startCamera(); return () => { cancelled = true; streamRef.current?.getTracks().forEach((track) => track.stop()); streamRef.current = null }
+
+    startCamera()
+
+    return () => {
+      cancelled = true
+      controls?.stop()
+      streamRef.current?.getTracks().forEach((track) => track.stop())
+      streamRef.current = null
+    }
   }, [isScannerOpen])
 
   const lookupProduct = useCallback(async (code: string) => {
