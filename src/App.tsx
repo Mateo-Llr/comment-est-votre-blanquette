@@ -130,48 +130,48 @@ function App() {
       }
 
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: { ideal: 'environment' },
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
-          }
-        })
-
-        streamRef.current = stream
-
         const video = videoRef.current
-        if (!video) {
-          stream.getTracks().forEach((track) => track.stop())
-          return
-        }
-
-        video.srcObject = stream
-        await video.play()
+        if (!video) return
 
         const codeReader = new BrowserMultiFormatReader()
         setScanStatus('Cadrez le code-barres')
 
-        controls = await codeReader.decodeFromVideoDevice(undefined, video, (result, error) => {
-          if (cancelled) return
+        // On laisse ZXing gérer seul l'accès caméra (via decodeFromConstraints) :
+        // faire un getUserMedia séparé en plus créait un second flux caméra,
+        // ce que la plupart des navigateurs mobiles refusent ou gèrent mal,
+        // contrairement au desktop où plusieurs flux passent souvent sans erreur.
+        controls = await codeReader.decodeFromConstraints(
+          {
+            video: {
+              facingMode: { ideal: 'environment' },
+              width: { ideal: 1280 },
+              height: { ideal: 720 }
+            }
+          },
+          video,
+          (result, error) => {
+            if (cancelled) return
 
-          if (result) {
-            const value = result.getText()
-            const cleanCode = value.replace(/\D/g, '').trim()
-            if (!cleanCode) return
-            setBarcode(cleanCode)
-            setScanStatus('Code détecté')
-            lookupProductRef.current(cleanCode)
-            controls?.stop()
-            stream.getTracks().forEach((track) => track.stop())
-            streamRef.current = null
-            return
-          }
+            if (result) {
+              const value = result.getText()
+              const cleanCode = value.replace(/\D/g, '').trim()
+              if (!cleanCode) return
+              setBarcode(cleanCode)
+              setScanStatus('Code détecté')
+              lookupProductRef.current(cleanCode)
+              controls?.stop()
+              streamRef.current?.getTracks().forEach((track) => track.stop())
+              streamRef.current = null
+              return
+            }
 
-          if (error && !(error instanceof NotFoundException)) {
-            setScanStatus('Caméra non compatible, saisissez le code')
+            if (error && !(error instanceof NotFoundException)) {
+              setScanStatus('Caméra non compatible, saisissez le code')
+            }
           }
-        })
+        )
+
+        streamRef.current = (video.srcObject as MediaStream | null) ?? null
       } catch {
         setScanStatus('Autorisez la caméra ou saisissez un code')
       }
