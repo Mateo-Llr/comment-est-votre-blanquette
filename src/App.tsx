@@ -139,6 +139,13 @@ function App() {
       {
         fps: 10,
         aspectRatio: 1.777,
+        videoConstraints: {
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+          frameRate: { ideal: 30 },
+          focusMode: 'continuous'
+        } as MediaTrackConstraints,
       },
       (decodedText) => {
         if (cancelled) return
