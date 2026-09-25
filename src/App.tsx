@@ -144,7 +144,10 @@ function App() {
           { facingMode: 'environment' },
           {
             fps: 20,
-            qrbox: { width: 350, height: 180 },
+            qrbox: (viewfinderWidth, viewfinderHeight) => ({
+              width: Math.min(350, Math.floor(viewfinderWidth * 0.86)),
+              height: Math.min(180, Math.floor(viewfinderHeight * 0.42)),
+            }),
             aspectRatio: 1,
           },
           (value) => {
