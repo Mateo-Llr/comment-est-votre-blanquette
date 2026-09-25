@@ -130,6 +130,7 @@ function App() {
       try {
         scanner = new Html5Qrcode('scanner-reader', {
           verbose: false,
+          useBarCodeDetectorIfSupported: false,
           formatsToSupport: [
             Html5QrcodeSupportedFormats.EAN_13,
             Html5QrcodeSupportedFormats.EAN_8,
@@ -139,7 +140,7 @@ function App() {
           ],
         })
         scannerRef.current = scanner
-        setScanStatus('Cadrez le code-barres')
+        setScanStatus('Recherche en continu...')
         await scanner.start(
           { facingMode: 'environment' },
           {
