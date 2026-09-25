@@ -99,7 +99,7 @@ const cameraScanConfig = {
     width: Math.min(350, Math.floor(viewfinderWidth * 0.86)),
     height: Math.min(180, Math.floor(viewfinderHeight * 0.42)),
   }),
-  aspectRatio: 1,
+  disableFlip: true,
 }
 
 function App() {
@@ -149,7 +149,7 @@ function App() {
         scannerRef.current = scanner
         setScanStatus('Recherche en continu...')
         await scanner.start(
-          { facingMode: 'environment' },
+          { facingMode: { ideal: 'environment' } },
           cameraScanConfig,
           (value) => {
             if (cancelled) return
@@ -163,7 +163,7 @@ function App() {
           () => undefined,
         )
       } catch {
-        setScanStatus('Autorisez la caméra ou saisissez un code')
+        setScanStatus('Caméra indisponible, saisissez un code')
       }
     }
 
@@ -234,7 +234,7 @@ function App() {
     } finally {
       try {
         await scanner.start(
-          { facingMode: 'environment' },
+          { facingMode: { ideal: 'environment' } },
           cameraScanConfig,
           (value) => {
             const cleanCode = value.replace(/\D/g, '').trim()
