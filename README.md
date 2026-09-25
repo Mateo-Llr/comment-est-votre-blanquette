@@ -6,7 +6,7 @@ Une application web pour mieux manger au fil des saisons et comprendre les produ
 
 - sélection de fruits et légumes de saison avec recherche instantanée ;
 - interface responsive pensée pour mobile ;
-- scanner via caméra avec `BarcodeDetector` lorsque le navigateur le supporte ;
+- scanner de codes-barres via caméra avec `html5-qrcode` ;
 - saisie manuelle de code-barres en solution de secours ;
 - recherche des informations produit via l'API Open Food Facts.
 
