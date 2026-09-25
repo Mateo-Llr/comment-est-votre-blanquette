@@ -140,7 +140,7 @@ function App() {
         // faire un getUserMedia séparé en plus créait un second flux caméra,
         // ce que la plupart des navigateurs mobiles refusent ou gèrent mal,
         // contrairement au desktop où plusieurs flux passent souvent sans erreur.
-        controls = await codeReader.decodeFromConstraints(
+        const cameraControls = await codeReader.decodeFromConstraints(
           {
             video: {
               facingMode: { ideal: 'environment' },
@@ -159,7 +159,7 @@ function App() {
               setBarcode(cleanCode)
               setScanStatus('Code détecté')
               lookupProductRef.current(cleanCode)
-              controls?.stop()
+              cameraControls.stop()
               streamRef.current?.getTracks().forEach((track) => track.stop())
               streamRef.current = null
               return
@@ -170,6 +170,13 @@ function App() {
             }
           }
         )
+
+        if (cancelled) {
+          cameraControls.stop()
+          return
+        }
+
+        controls = cameraControls
 
         streamRef.current = (video.srcObject as MediaStream | null) ?? null
       } catch {
